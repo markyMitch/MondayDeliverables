@@ -1,4 +1,4 @@
-all: sniff icmp_spoof icmp_snoof 
+all: sniff icmp_spoof icmp_snoof DNS 
 
 
 sniff: sniff.c myheader.h
@@ -9,6 +9,10 @@ icmp_spoof: icmp_spoof.c spoof.c myheader.h
 
 icmp_snoof: icmp_snoof.c spoof.c myheader.h
 	gcc -o icmp_snoof icmp_snoof.c spoof.c -lpcap
+
+DNS: DNS.c myheader.h
+	gcc -o DNS DNS.c
+
 
 clean:	
 	rm -f sniff icmp_spoof icmp_snoof 
