@@ -7,7 +7,7 @@
 
 #define PACKET_LEN   1500
 
-
+#define UDP_PROTOCOL 0x11
 /* Ethernet header */
 struct ethheader {
     u_char  ether_dhost[ETHER_ADDR_LEN];    /* destination host address */

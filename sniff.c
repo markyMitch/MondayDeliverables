@@ -16,6 +16,7 @@ void process_ip(struct ipheader* ip);
 
 void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet)
 {
+  printf("got a sniff packet\n");
   struct ethheader *eth = (struct ethheader *)packet;
   if (ntohs(eth->ether_type) == 0x0800) 
       process_ip((struct ipheader*)(packet + SIZE_ETHERNET));

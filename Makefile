@@ -11,7 +11,7 @@ icmp_snoof: icmp_snoof.c spoof.c myheader.h
 	gcc -o icmp_snoof icmp_snoof.c spoof.c -lpcap
 
 DNS: DNS.c myheader.h
-	gcc -o DNS DNS.c
+	gcc -o DNS DNS.c spoof.c -lpcap
 
 
 clean:	
