@@ -24,7 +24,8 @@ void send_raw_ip_packet(struct ipheader* ip)
 
     // Send the packet out.
     printf("Sending spoofed IP packet...\n");
-    sendto(sock, ip, ntohs(ip->iph_len), 0, (struct sockaddr *)&dest_info, sizeof(dest_info));
+    int returnval = sendto(sock, ip, ntohs(ip->iph_len), 0, (struct sockaddr *)&dest_info, sizeof(dest_info));
+    printf("return is %i bytes\n",returnval);
     close(sock);
 }
 

@@ -82,12 +82,13 @@ void spoof_DNS_reply(struct ipheader* ip)
     newudp->udp_sport = udp->udp_dport;
     newudp->udp_dport = udp->udp_sport;
 
+    int increment = 8 + (newip->iph_ihl * 4);
 
     //DNS bit here
     //int udp_header_len = ip->iph_ihl * 4;
     
-    struct dnsheader* dns = (struct dnsheader *) ((u_char *)udp + udp_header_len);
-    unsigned short dnsLength = construct_dns_reply(buffer + sizeof(struct ipheader) + sizeof(struct udpheader));
+    struct dnsheader* dns = (struct dnsheader *) ((u_char *)udp + 8);//udp packet always 8 bytes
+    construct_dns_reply(buffer + increment);
 
     send_raw_ip_packet(newip);
 }
